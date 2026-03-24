@@ -2,9 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-import winsound
 import os
+import platform # Necessário para verificar o sistema operacional
 from streamlit_autorefresh import st_autorefresh
+
+# --- AJUSTE PARA COMPATIBILIDADE COM NUVEM (LINUX) ---
+if platform.system() == "Windows":
+    import winsound
+else:
+    winsound = None # Desativa o som se não estiver no Windows
 
 # Importações dos seus módulos locais
 from modules.alerts import enviar_alerta
@@ -96,6 +102,8 @@ with col_relatorio:
         if oportunidades:
             st.markdown(f"#### 🎯 Oportunidades Detectadas ({len(oportunidades)})")
             df_opt = pd.DataFrame(oportunidades).sort_values(by="rating", ascending=False)
+            
+            # Utilizando o modelo de tabela mais completo (inferior) com vol_m e dif
             st.dataframe(df_opt[["nome", "tipo", "rating", "score", "volat", "preco", "ent", "stp", "alv", "vol_m", "dif"]], use_container_width=True, hide_index=True)
             
             cols_graf = st.columns(3)
@@ -104,7 +112,7 @@ with col_relatorio:
                     cor_titulo = "#00c853" if row['tipo'] == "COMPRA" else "#ff1744"
                     st.markdown(f"<div style='border-bottom: 2px solid {cor_titulo};'><b>{row['nome']}</b> <span style='color:gray; font-size:12px;'>| R:{row['rating']}</span></div>", unsafe_allow_html=True)
                     
-                    # --- AJUSTE MINI GRÁFICO: MA9, MA21 e LEGENDA ---
+                    # Mini gráfico com MA9, MA21 e legenda
                     fig_opt = go.Figure(data=[go.Candlestick(x=row['df'].index, open=row['df']['Open'], high=row['df']['High'], low=row['df']['Low'], close=row['df']['Close'], name=row['nome'])])
                     fig_opt.add_trace(go.Scatter(x=row['df'].index, y=row['df']['MA9'], line=dict(color='#2962ff', width=1), name='MA9'))
                     fig_opt.add_trace(go.Scatter(x=row['df'].index, y=row['df']['MA21'], line=dict(color='#ff9800', width=1), name='MA21'))
@@ -126,7 +134,7 @@ with col_relatorio:
                             "Entrada": round(row['ent'], 2), "Stop": round(row['stp'], 2), "Alvo": round(row['alv'], 2)
                         })
                     
-                    # --- AJUSTE MENSAGEM TELEGRAM: FORMATO PRO E 2 CASAS DECIMAIS ---
+                    # Mensagem profissional com 2 casas decimais
                     if row['rating'] >= 8 and row['nome'] not in st.session_state.alertados:
                         st.session_state.alertados.add(row['nome'])
                         msg = (
@@ -139,8 +147,9 @@ with col_relatorio:
                             f"🎯 Alvo: {row['alv']:.2f}"
                         )
                         enviar_alerta(msg)
-                        try: winsound.Beep(1500, 600)
-                        except: pass
+                        if winsound: # Só toca o bip se estiver no Windows
+                            try: winsound.Beep(1500, 600)
+                            except: pass
         else:
             st.info("🔎 Monitorando mercado...")
 
@@ -149,7 +158,6 @@ with col_relatorio:
         if os.path.exists("diario_trades.csv"):
             df_diario = pd.read_csv("diario_trades.csv")
             
-            # --- MÉTRICAS DE PERFORMANCE ---
             m1, m2, m3 = st.columns(3)
             m1.metric("Total de Trades", len(df_diario))
             m2.metric("Média de Rating", f"{df_diario['Rating'].mean():.1f}/10")
