@@ -57,8 +57,8 @@ def processar_acao(acao, dados_brutos, total_acoes):
             tipo = "COMPRA"
             ent = topo
             stp = fundo
-            alv = topo + (topo - fundo) * 1.5
-            dif = ((topo + (topo - fundo) * 1.5)- preco-fundo) - (preco-fundo)
+            alv = topo + (topo - fundo) * 0.8
+            dif = ((topo + (topo - fundo) * 0.8)- preco-fundo) - (preco-fundo)
             
             
         # Venda: Preço abaixo das médias E rompendo fundo
@@ -66,8 +66,8 @@ def processar_acao(acao, dados_brutos, total_acoes):
             tipo = "VENDA"
             ent = fundo
             stp = topo
-            alv = fundo - (topo - fundo) * 1.5
-            dif = ((topo + (topo - fundo) * 1.5)- preco-fundo) - (preco-fundo)
+            alv = fundo - (topo - fundo) * 0.8
+            dif = ((topo + (topo - fundo) * 0.8)- preco-fundo) - (preco-fundo)
 
         return {
             "nome": acao.replace(".SA",""),
