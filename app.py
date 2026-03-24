@@ -3,14 +3,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import os
-import platform # Necessário para verificar o sistema operacional
+import platform 
 from streamlit_autorefresh import st_autorefresh
 
 # --- AJUSTE PARA COMPATIBILIDADE COM NUVEM (LINUX) ---
 if platform.system() == "Windows":
     import winsound
 else:
-    winsound = None # Desativa o som se não estiver no Windows
+    winsound = None 
 
 # Importações dos seus módulos locais
 from modules.alerts import enviar_alerta
@@ -28,7 +28,6 @@ except:
 
 # 2. FUNÇÃO DIÁRIO DE TRADE (LOG)
 def registrar_trade(dados):
-    """Salva a operação em um arquivo CSV para acompanhamento posterior."""
     arquivo = "diario_trades.csv"
     df_log = pd.DataFrame([dados])
     if os.path.exists(arquivo):
@@ -45,7 +44,7 @@ if "acao_selecionada" not in st.session_state: st.session_state.acao_selecionada
 
 st_autorefresh(interval=60000, key="refresh")
 
-st.title("🚀 Radar Profissional - Rating, Pontuação e Volatilidade")
+st.title("🚀 Radar Profissional")
 
 # 4. CARREGAR TICKERS
 try:
@@ -56,7 +55,9 @@ except:
 
 # 5. PROCESSAMENTO DE DADOS
 dados_brutos = carregar_dados(acoes)
-col_precos, col_relatorio = st.columns([1.2, 4])
+
+# AJUSTE MOBILE: No celular as colunas empilham automaticamente
+col_precos, col_relatorio = st.columns([1, 3.5])
 
 analises = []
 oportunidades = []
@@ -68,115 +69,87 @@ for acao in acoes:
         if res['tipo'] != "NEUTRO" and res['rating'] >= 5: 
             oportunidades.append(res)
 
-# --- COLUNA LATERAL ---
+# --- COLUNA DE MONITORAMENTO (OTIMIZADA PARA MOBILE) ---
 with col_precos:
-    st.markdown("### 📊 Monitoramento")
-    st.caption("Tempo Gráfico: 5 Minutos")
-    
-    for a in analises:
-        cor_seta = "🟢" if a['var'] >= 0 else "🔴"
-        seta = "▲" if a['var'] >= 0 else "▼"
-        label = f"{cor_seta} {a['nome']} | R$ {a['preco']:.2f} | {seta} {abs(a['var']):.2f}%"
-        if st.button(label, key=f"btn_{a['nome']}"):
-            st.session_state.acao_selecionada = a['nome']
+    # Usamos um expander que vem fechado no celular para não ocupar a tela toda
+    with st.expander("📊 Monitoramento de Preços", expanded=True):
+        for a in analises:
+            cor_seta = "🟢" if a['var'] >= 0 else "🔴"
+            seta = "▲" if a['var'] >= 0 else "▼"
+            # Label simplificado para caber melhor em telas estreitas
+            label = f"{cor_seta} {a['nome']} | R$ {a['preco']:.2f} | {seta} {abs(a['var']):.2f}%"
+            if st.button(label, key=f"btn_{a['nome']}", use_container_width=True):
+                st.session_state.acao_selecionada = a['nome']
 
 # --- COLUNA PRINCIPAL ---
 with col_relatorio:
-    tab_radar, tab_diario = st.tabs(["🎯 Radar de Oportunidades", "📝 Diário de Trade"])
+    tab_radar, tab_diario = st.tabs(["🎯 Radar", "📝 Diário"])
 
     with tab_radar:
-        # A. Gráfico em Foco
         if st.session_state.acao_selecionada:
             sel = st.session_state.acao_selecionada
             info = next((x for x in analises if x['nome'] == sel), None)
             if info:
-                st.markdown(f"### 📈 Gráfico em Foco: {sel} <span style='font-size: 14px; color: gray;'>(5 Min)</span>", unsafe_allow_html=True)
+                st.markdown(f"### 📈 {sel} (5 Min)")
                 fig = go.Figure(data=[go.Candlestick(x=info['df'].index, open=info['df']['Open'], high=info['df']['High'], low=info['df']['Low'], close=info['df']['Close'], name=sel)])
                 fig.add_trace(go.Scatter(x=info['df'].index, y=info['df']['MA9'], line=dict(color='#2962ff', width=1.5), name='MA9'))
                 fig.add_trace(go.Scatter(x=info['df'].index, y=info['df']['MA21'], line=dict(color='#ff9800', width=1.5), name='MA21'))
-                fig.update_layout(xaxis_rangeslider_visible=False, height=350, margin=dict(l=0, r=0, t=10, b=0), template="plotly_white")
+                # Margens zeradas para o gráfico ocupar toda a largura no celular
+                fig.update_layout(xaxis_rangeslider_visible=False, height=380, margin=dict(l=0, r=0, t=10, b=0), template="plotly_white")
                 st.plotly_chart(fig, use_container_width=True)
                 st.divider()
 
-        # B. Oportunidades
         if oportunidades:
-            st.markdown(f"#### 🎯 Oportunidades Detectadas ({len(oportunidades)})")
+            st.markdown(f"#### 🎯 Oportunidades ({len(oportunidades)})")
             df_opt = pd.DataFrame(oportunidades).sort_values(by="rating", ascending=False)
             
-            # Utilizando o modelo de tabela mais completo (inferior) com vol_m e dif
+            # Tabela completa (pode exigir scroll horizontal no celular)
             st.dataframe(df_opt[["nome", "tipo", "rating", "score", "volat", "preco", "ent", "stp", "alv", "vol_m", "dif"]], use_container_width=True, hide_index=True)
             
+            # No celular, o 'columns(3)' vira uma lista vertical
             cols_graf = st.columns(3)
             for i, row in enumerate(oportunidades):
                 with cols_graf[i % 3]:
                     cor_titulo = "#00c853" if row['tipo'] == "COMPRA" else "#ff1744"
-                    st.markdown(f"<div style='border-bottom: 2px solid {cor_titulo};'><b>{row['nome']}</b> <span style='color:gray; font-size:12px;'>| R:{row['rating']}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='border-bottom: 2px solid {cor_titulo}; padding-top:10px;'><b>{row['nome']}</b> <span style='color:gray; font-size:12px;'>| R:{row['rating']}</span></div>", unsafe_allow_html=True)
                     
-                    # Mini gráfico com MA9, MA21 e legenda
                     fig_opt = go.Figure(data=[go.Candlestick(x=row['df'].index, open=row['df']['Open'], high=row['df']['High'], low=row['df']['Low'], close=row['df']['Close'], name=row['nome'])])
                     fig_opt.add_trace(go.Scatter(x=row['df'].index, y=row['df']['MA9'], line=dict(color='#2962ff', width=1), name='MA9'))
                     fig_opt.add_trace(go.Scatter(x=row['df'].index, y=row['df']['MA21'], line=dict(color='#ff9800', width=1), name='MA21'))
                     
                     fig_opt.update_layout(
-                        xaxis_rangeslider_visible=False, 
-                        height=250, 
-                        showlegend=True, 
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)),
-                        margin=dict(l=5, r=5, t=25, b=5), 
-                        template="plotly_white"
+                        xaxis_rangeslider_visible=False, height=250, showlegend=True, 
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=9)),
+                        margin=dict(l=0, r=0, t=25, b=0), template="plotly_white"
                     )
                     st.plotly_chart(fig_opt, use_container_width=True)
 
-                    if st.button(f"📝 Log {row['nome']}", key=f"log_{row['nome']}"):
+                    if st.button(f"📝 Log {row['nome']}", key=f"log_{row['nome']}", use_container_width=True):
                         registrar_trade({
                             "Data": pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
                             "Ativo": row['nome'], "Tipo": row['tipo'], "Rating": row['rating'],
                             "Entrada": round(row['ent'], 2), "Stop": round(row['stp'], 2), "Alvo": round(row['alv'], 2)
                         })
                     
-                    # Mensagem profissional com 2 casas decimais
                     if row['rating'] >= 8 and row['nome'] not in st.session_state.alertados:
                         st.session_state.alertados.add(row['nome'])
-                        msg = (
-                            f"🔥 *SINAL DE TRADE PRO*\n\n"
-                            f"Ação: {row['nome']}\n"
-                            f"Operação: {row['tipo']}\n"
-                            f"Score: {row['score']}/10\n\n"
-                            f"📍 Entrada: {row['ent']:.2f}\n"
-                            f"🛡️ Stop: {row['stp']:.2f}\n"
-                            f"🎯 Alvo: {row['alv']:.2f}"
-                        )
+                        msg = (f"🔥 *SINAL DE TRADE PRO*\n\nAtivo: {row['nome']}\nOperação: {row['tipo']}\nScore: {row['score']}/10\n\n📍 Entrada: {row['ent']:.2f}\n🛡️ Stop: {row['stp']:.2f}\n🎯 Alvo: {row['alv']:.2f}")
                         enviar_alerta(msg)
-                        if winsound: # Só toca o bip se estiver no Windows
+                        if winsound:
                             try: winsound.Beep(1500, 600)
                             except: pass
         else:
-            st.info("🔎 Monitorando mercado...")
+            st.info("🔎 Monitorando...")
 
     with tab_diario:
-        st.markdown("### 📖 Histórico e Performance")
+        st.markdown("### 📖 Performance")
         if os.path.exists("diario_trades.csv"):
             df_diario = pd.read_csv("diario_trades.csv")
-            
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total de Trades", len(df_diario))
-            m2.metric("Média de Rating", f"{df_diario['Rating'].mean():.1f}/10")
-            m3.metric("Ativo mais Operado", df_diario['Ativo'].mode()[0] if not df_diario.empty else "-")
-
-            col_chart1, col_chart2 = st.columns(2)
-            with col_chart1:
-                fig_pizza = px.pie(df_diario, names='Tipo', title='Distribuição Compra/Venda', color='Tipo',
-                                  color_discrete_map={'COMPRA':'#00c853', 'VENDA':'#ff1744'})
-                st.plotly_chart(fig_pizza, use_container_width=True)
-            
-            with col_chart2:
-                fig_bar = px.bar(df_diario['Ativo'].value_counts(), title='Frequência por Ativo')
-                st.plotly_chart(fig_bar, use_container_width=True)
-
+            m1.metric("Trades", len(df_diario))
+            m2.metric("Rating Médio", f"{df_diario['Rating'].mean():.1f}")
+            m3.metric("Top Ativo", df_diario['Ativo'].mode()[0] if not df_diario.empty else "-")
             st.dataframe(df_diario.sort_index(ascending=False), use_container_width=True, hide_index=True)
-            
-            if st.button("🗑️ Limpar Histórico"):
+            if st.button("🗑️ Limpar Histórico", use_container_width=True):
                 os.remove("diario_trades.csv")
                 st.rerun()
-        else:
-            st.info("Registre trades para ver sua performance aqui.")
